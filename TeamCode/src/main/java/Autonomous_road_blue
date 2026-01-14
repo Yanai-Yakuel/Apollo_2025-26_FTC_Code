@@ -29,54 +29,48 @@ public class Autonomous_goal_blue extends LinearOpMode {
                         .back(43)
                         .build()
         );
-
-        // 3 שניות "דמוי ירי" - להכניס כאן עוד ירי
         sleep(2000);
 
-
-          drive.followTrajectory(
-             drive.trajectoryBuilder(drive.getPoseEstimate())
-                       .back(19) //17 nice not  best
-                      .build()
-                       );
-
         // סיבוב  (לאיסוף)
-      drive.turn(Math.toRadians(45));
-
-      //MOVE 3 - 44 אינץ קדימה (על הכדורים)
-
-      drive.followTrajectory(
-            drive.trajectoryBuilder(drive.getPoseEstimate())
-                    .forward(55)
-                       .build()
-       );
+        drive.turn(Math.toRadians(45));
 
 
-        // MOVE 4 - 40 אינץ אחורה
-      drive.followTrajectory(
-             drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .back(40)//40
+        // MOVE 1 - 43 אינץ קדימה
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .strafeLeft(5)
                         .build()
         );
 
-         //סיבוב 90 מעלות לכיוון ירי שני
-        drive.turn(Math.toRadians(-45));
 
-        // MOVE 4 - 40 אינץ אחורה
-
-       drive.followTrajectory(
-             drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .forward(20)//15
+        // MOVE 1 - 43 אינץ קדימה
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .forward(30)
                         .build()
-      );
-        // להכניס כאן עוד ירי כרגע  דימוי לירי
-        sleep(2000);
+        );
+        // MOVE 1 - 43 אינץ קדימה
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .back(32)
+                        .build()
+        );
+
+        drive.turn(Math.toRadians(-47));
+
+
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .forward(9)
+                        .build()
+        );
+
+        // 3 שניות "דמוי ירי" - להכניס כאן עוד ירי
+
 
 
         // שינוי זווית בסיום האוטונומי לכייל פילד אוריאנטד טלאופ .
-        drive.turn(Math.toRadians(-45));
         drive.update();  // עדכון נוסף לבטחון
-
 
         double finalY = drive.getPoseEstimate().getY();
         double finalX = drive.getPoseEstimate().getX();
