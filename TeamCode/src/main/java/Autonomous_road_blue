@@ -16,7 +16,7 @@ public class Autonomous_goal_blue extends LinearOpMode {
         drive = new SampleMecanumDrive(hardwareMap);
 
         // מצב התחלה
-        Pose2d startPose = new Pose2d(-63, -49, Math.toRadians(-90));
+        Pose2d startPose = new Pose2d(-63, 65, Math.toRadians(-90));
         drive.setPoseEstimate(startPose);
         double startY = startPose.getY();
 
