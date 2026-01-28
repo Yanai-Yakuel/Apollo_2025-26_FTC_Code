@@ -25,7 +25,7 @@ public class CompetitionDrive extends LinearOpMode {
 
     // === PID לכיול בדאשבורד ===
     public static double P = 30, I = 2, D = 0, F = 13.5;
-    public static double SHOOT_TARGET_RPM = 1500;  // RPM לכיול
+    public static double SHOOT_TARGET_RPM = 1400;  // RPM לכיול
 
     private final double SHOOT_TARGET_VEL = (SHOOT_TARGET_RPM * 28.0) / 60.0;
 
@@ -39,7 +39,7 @@ public class CompetitionDrive extends LinearOpMode {
     public static double ROTATION_POWER = 0.65;
 
     // === SERVO POSITIONS לכיול ===
-    public static double CLOSE_POS = 0.65;
+    public static double CLOSE_POS = 0.7;
     public static double OPEN_POS = 0.92;
     public static double S_HOOD_SHOOT = 1.0;
     public static double S_HOOD_R = 0.21;
@@ -57,6 +57,8 @@ public class CompetitionDrive extends LinearOpMode {
 
     private Pose2d targetPose = new Pose2d();
     private boolean holding = false;
+
+    private boolean lastGamepad1B = false; // משתנה חדש למעקב
 
     @Override
     public void runOpMode() throws InterruptedException {
@@ -109,9 +111,15 @@ public class CompetitionDrive extends LinearOpMode {
             }
 
             // === 2. SHOOTER ===
-            if (gamepad1.b) readyToShoot = true;
-            else if (gamepad1.x) readyToShoot = false;
+            if (gamepad1.b && !lastGamepad1B) {
+                readyToShoot = !readyToShoot; // הופך את המצב (מ-true ל-false ולהפך)
+            }
+            lastGamepad1B = gamepad1.b; // מעדכן את המצב לסיבוב הבא
 
+// (אופציונלי) אפשר להשאיר את X ככפתור חירום לכיבוי בלבד
+            if (gamepad1.x) {
+                readyToShoot = false;
+            }
             if (readyToShoot) {
                 shoot_u.setVelocity(SHOOT_TARGET_VEL);
                 shoot_d.setVelocity(SHOOT_TARGET_VEL);
@@ -142,11 +150,9 @@ public class CompetitionDrive extends LinearOpMode {
                 shoot_d.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
 
             }
-
-
+            ///   Math.abs(shoot_u.getVelocity() - SHOOT_TARGET_VEL) < 70)
             // === 3. SHOOTING ===
-            if (gamepad1.dpad_up && shootState == ShootState.IDLE && readyToShoot &&
-                    Math.abs(shoot_u.getVelocity() - SHOOT_TARGET_VEL) < 70) {
+            if (gamepad1.dpad_up && shootState == ShootState.IDLE && readyToShoot) {
                 shootState = ShootState.PUSH;
                 shotCount = 0;
                 shootTimer.reset();
@@ -164,7 +170,7 @@ public class CompetitionDrive extends LinearOpMode {
                 case FILL:
                     if (shootTimer.milliseconds() > 900) {
                         shotCount++;
-                        if (shotCount < 3) shootState = ShootState.PUSH;
+                        if (shotCount < 1) shootState = ShootState.PUSH;
                         else shootState = ShootState.IDLE;
                         shootTimer.reset();
                     } break;
@@ -174,10 +180,11 @@ public class CompetitionDrive extends LinearOpMode {
 
             // === 4. DRIVE ===
             if (gamepad1.a) {
-                targetPose = new Pose2d(16.86, 14.38, Math.toRadians(45));
+                targetPose = new Pose2d(23.4, 22, Math.toRadians(45));
                 holding = true;
+
             } else if (gamepad1.y) {
-                targetPose = new Pose2d(50, 0, Math.toRadians(75));
+                targetPose = new Pose2d(47.1, 10.7, Math.toRadians(75));
                 holding = true;
             } else if (Math.abs(gamepad1.left_stick_y) > 0.1 || Math.abs(gamepad1.left_stick_x) > 0.1 || Math.abs(gamepad1.right_stick_x) > 0.1) {
                 holding = false;
@@ -186,8 +193,8 @@ public class CompetitionDrive extends LinearOpMode {
             if (holding) {
                 executePD(pose, poseVelocity);
             } else {
-                double ly = -gamepad1.left_stick_y * DRIVE_POWER;
-                double lx = -gamepad1.left_stick_x * DRIVE_POWER;
+                double ly = gamepad1.left_stick_x * DRIVE_POWER;
+                double lx = gamepad1.left_stick_y * DRIVE_POWER;
                 double rx = -gamepad1.right_stick_x * ROTATION_POWER;
 
                 double botHeading = pose.getHeading();
