@@ -1,0 +1,181 @@
+package org.firstinspires.ftc.teamcode.drive;
+
+import com.acmerobotics.roadrunner.geometry.Pose2d;
+import com.acmerobotics.roadrunner.profile.VelocityConstraint;
+import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+import com.qualcomm.robotcore.hardware.Servo;
+
+@Autonomous(group = "drive")
+public class Autonomous_goal_red extends LinearOpMode {
+
+    private SampleMecanumDrive drive;
+    private DcMotor intakeMotor, transferMotor;
+    private DcMotorEx shoot_u, shoot_d;
+    private Servo s_transfer, s_hood;
+
+    // 🔥 THREAD לשמירה על שוטר ON כל האוטונומי
+    private Thread shooterThread;
+
+    // הגדרות ירי - PID
+    public static double P = 30, I = 2, D = 0, F = 13.5;
+    public static double SHOOT_TARGET_RPM = 1350;
+    private final double SHOOT_TARGET_VEL = (SHOOT_TARGET_RPM * 28.0) / 60.0;
+
+    private double close_pos = 0.7;
+    private double open_pos = 0.92;
+
+    @Override
+    public void runOpMode() throws InterruptedException {
+        // אתחול חומרה
+        drive = new SampleMecanumDrive(hardwareMap);
+        intakeMotor = hardwareMap.get(DcMotor.class, "intake");
+        transferMotor = hardwareMap.get(DcMotor.class, "transfer");
+        shoot_u = hardwareMap.get(DcMotorEx.class, "shoot_u");
+        shoot_d = hardwareMap.get(DcMotorEx.class, "shoot_d");
+        s_hood = hardwareMap.get(Servo.class, "s_hood");
+        s_transfer = hardwareMap.get(Servo.class, "s_transfer");
+
+        // הגדרות מנועי ירי
+        shoot_u.setDirection(DcMotorSimple.Direction.REVERSE);
+        shoot_u.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        shoot_d.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        shoot_u.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
+        shoot_d.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
+
+        // מצב התחלה
+        Pose2d startPose = new Pose2d(50.3, 51.7, Math.toRadians(-45));
+        drive.setPoseEstimate(startPose);
+        s_transfer.setPosition(open_pos);
+        s_hood.setPosition(1.0);
+
+        telemetry.addLine("Shooter Ready - Will run throughout Auto");
+        telemetry.update();
+
+        // הפעלה עוד לפני הסטארט
+        shoot_u.setVelocity(SHOOT_TARGET_VEL);
+        shoot_d.setVelocity(SHOOT_TARGET_VEL);
+
+        waitForStart();
+        if (isStopRequested()) return;
+
+        // 🔥 שינוי אחד - THREAD ששומר שוטר ON כל האוטונומי (ברקע)
+        shooterThread = new Thread(() -> {
+            while (opModeIsActive() && !isStopRequested()) {
+                shoot_u.setVelocity(SHOOT_TARGET_VEL);
+                shoot_d.setVelocity(SHOOT_TARGET_VEL);
+                try {
+                    Thread.sleep(10); // כל 10ms
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        });
+        shooterThread.start();
+
+        // וידוא הפעלה שוב מיד עם הלחיצה על Play
+        shoot_u.setVelocity(SHOOT_TARGET_VEL);
+        shoot_d.setVelocity(SHOOT_TARGET_VEL);
+
+        // --- תחילת תנועה --- (כל הקוד המקורי שלך ללא שינוי!)
+        // MOVE 1 - 43 אינץ' אחורה
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .back(39)
+                        .build()
+        );
+
+        // ירי ראשון
+        shootRings(4);
+
+        sleep(500);
+
+        // סיבוב (לאיסוף)
+        drive.turn(Math.toRadians(-90));
+
+        // Strafe Left
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .strafeLeft(24)
+                        .build()
+        );
+
+        // הפעלת אינטייק
+        intakeMotor.setPower(-1.0);
+        transferMotor.setPower(1.0);
+
+
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .forward(38)  // חלק לשתי נסיעות קצרות
+                        .build()
+        );
+
+        // נסיעה אחורה אחרי איסוף
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .back(38)
+                        .build()
+        );
+
+        // כיבוי אינטייק זמני
+        intakeMotor.setPower(0);
+        transferMotor.setPower(0);
+
+        // חזרה למיקום ירי
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .strafeRight(24)
+                        .build()
+        );
+
+        // פנייה חזרה למטרה
+        drive.turn(Math.toRadians(90));
+
+        // ירי סופי
+        shootRings(4);
+
+        drive.turn(Math.toRadians(-90));
+
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .strafeRight(30)
+                        .build()
+        );
+
+
+        // כיבוי השוטר רק בסוף האוטונומי לגמרי
+        shoot_u.setVelocity(0);
+        shoot_d.setVelocity(0);
+
+        telemetry.addData("Status", "Complete");
+        telemetry.update();
+    }
+
+    private void shootRings(int count) throws InterruptedException {
+        for (int i = 0; i < count; i++) {
+            if (isStopRequested()) return;
+
+            // העלאת טבעת
+            intakeMotor.setPower(-1.0);
+            transferMotor.setPower(1.0);
+            sleep(600);
+
+            // לחיצה
+            s_transfer.setPosition(close_pos);
+            intakeMotor.setPower(0);
+            sleep(450);
+
+            // שחרור לירי
+            s_transfer.setPosition(open_pos);
+            sleep(400);
+        }
+        intakeMotor.setPower(0);
+        transferMotor.setPower(0);
+    }
+}
