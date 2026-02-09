@@ -1,0 +1,131 @@
+package org.firstinspires.ftc.teamcode.drive;
+
+import com.acmerobotics.roadrunner.geometry.Pose2d;
+import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+import com.qualcomm.robotcore.hardware.Servo;
+import java.lang.Thread;
+
+@Autonomous(name = "far 2026", group = "far")  // group שונה!
+public class autonomous_far extends LinearOpMode {
+
+    private SampleMecanumDrive drive;
+    private DcMotor intakeMotor, transferMotor;
+    private DcMotorEx shoot_u, shoot_d;
+    private Servo s_transfer, s_hood;
+
+    // Thread לשמירה על שוטר ON רק בזמן הריצה
+    private Thread shooterThread;
+
+    // הגדרות ירי - PID
+    public static double P = 30, I = 2, D = 0, F = 13.5;
+    public static double SHOOT_TARGET_RPM = 6000;
+    private final double SHOOT_TARGET_VEL = (SHOOT_TARGET_RPM * 28.0) / 60.0;
+
+    private double close_pos = 0.7;
+    private double open_pos = 0.92;
+
+    @Override
+    public void runOpMode() throws InterruptedException {
+        // --- אתחול חומרה - בלי drive עדיין ---
+        intakeMotor = hardwareMap.get(DcMotor.class, "intake");
+        transferMotor = hardwareMap.get(DcMotor.class, "transfer");
+        shoot_u = hardwareMap.get(DcMotorEx.class, "shoot_u");
+        shoot_d = hardwareMap.get(DcMotorEx.class, "shoot_d");
+        s_hood = hardwareMap.get(Servo.class, "s_hood");
+        s_transfer = hardwareMap.get(Servo.class, "s_transfer");
+
+        // הגדרות מנועי ירי
+        shoot_u.setDirection(DcMotorSimple.Direction.REVERSE);
+        shoot_u.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        shoot_d.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        shoot_u.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
+        shoot_d.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
+
+        // ✅ כבוי מוחלט ב-INIT - לפני drive!
+        shoot_u.setPower(0);      // חסימת כוח
+        shoot_d.setPower(0);
+        shoot_u.setVelocity(0);
+        shoot_d.setVelocity(0);
+
+        s_transfer.setPosition(open_pos);
+        s_hood.setPosition(1.0);
+
+        telemetry.addData("ShootU", "%.0f", shoot_u.getVelocity());
+        telemetry.addData("ShootD", "%.0f", shoot_d.getVelocity());
+        telemetry.addLine("✅ Shooter OFF - Waiting...");
+        telemetry.update();
+
+        waitForStart();
+        if (isStopRequested()) return;
+
+        // 🔥 עכשיו רק - drive + Thread
+        drive = new SampleMecanumDrive(hardwareMap);  // ← ה-driver רק כאן!
+        Pose2d startPose = new Pose2d(50.3, 51.7, Math.toRadians(-45));
+        drive.setPoseEstimate(startPose);
+
+        // הפעלת Thread
+        shooterThread = new Thread(() -> {
+            while (opModeIsActive() && !isStopRequested()) {
+                shoot_u.setVelocity(SHOOT_TARGET_VEL);
+                shoot_d.setVelocity(SHOOT_TARGET_VEL);
+                try { Thread.sleep(10); } catch (InterruptedException e) { break; }
+            }
+        });
+        shooterThread.start();
+
+        sleep(5000);
+
+        shootRings(4);
+
+        sleep(500);
+
+        // נסיעה ראשונה: 43 אינץ' אחורה
+        drive.followTrajectory(
+                drive.trajectoryBuilder(drive.getPoseEstimate())
+                        .forward(15)
+                        .build()
+        );
+
+        // ירי ראשון - 4 טבעות
+
+
+        // --- סיום האוטונומי ---
+        if (shooterThread != null && shooterThread.isAlive()) {
+            shooterThread.interrupt();
+        }
+        shoot_u.setVelocity(0);
+        shoot_d.setVelocity(0);
+        intakeMotor.setPower(0);
+        transferMotor.setPower(0);
+
+        telemetry.addData("Status", "Complete - Shooter OFF");
+        telemetry.update();
+    }
+
+    private void shootRings(int count) throws InterruptedException {
+        for (int i = 0; i < count; i++) {
+            if (isStopRequested()) return;
+
+            // העלאת טבעת למעלה
+            intakeMotor.setPower(-1.0);
+            transferMotor.setPower(1.0);
+            sleep(600);
+
+            // לחיצה על הטבעת לתוך הגלגלים
+            s_transfer.setPosition(close_pos);
+            intakeMotor.setPower(0);
+            sleep(450);
+
+            // שחרור הסרוו חזרה
+            s_transfer.setPosition(open_pos);
+            sleep(400);
+        }
+        intakeMotor.setPower(0);
+        transferMotor.setPower(0);
+    }
+}
