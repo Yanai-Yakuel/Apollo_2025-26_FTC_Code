@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.drive;
 
+import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.teamcode.drive.opmode.PoseStorage;
 
 import com.acmerobotics.roadrunner.geometry.Pose2d;
@@ -11,71 +12,41 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import java.util.Random;
-
 
 @Autonomous(name = "Autonomous_goal_blue", group = "drive")
 public class Autonomous_goal_blue extends LinearOpMode {
 
     private SampleMecanumDrive drive;
-    private DcMotor intakeMotor;
+    private DcMotor intakeMotor, transfer_motor;
     private DcMotorEx shoot_u, shoot_d;
-    private Servo s_transfer, s_block; // hood
+    private Servo s_transfer, s_block;
 
     public static double P = 30, I = 2, D = 0, F = 13.5;
     public static double SHOOT_TARGET_RPM = 1400;
     private final double SHOOT_TARGET_VEL = (SHOOT_TARGET_RPM * 28.0) / 60.0;
 
     private double CLOSE_POS = 0;
-    private double OPEN_POS = 0.06; //0.06
-    public static double B_OPEN = 0.0555;
-    public static double B_CLOSE = 0;
+    private double OPEN_POS = 0.06;
+    public static double B_OPEN = 0.572;
+    public static double B_CLOSE = 0.52;
 
+    private ElapsedTime shootTimer = new ElapsedTime();
 
-    Pose2d endPose = new Pose2d(42, 5, Math.toRadians(52));
-
-
+    // מיקום התחלתי
+    Pose2d startPose = new Pose2d(53.421, 47.47, Math.toRadians(52));
 
     @Override
     public void runOpMode() throws InterruptedException {
-
-        Random random = new Random();
-
-        String[] teamMembers = {
-                "yanai",
-                "amit",
-                "nir",
-                "yuri",
-                "shvadi",
-                "uri",
-                "ya'ari",
-                "tamir",
-                "yogev",
-                "neta",
-                "benya",
-                "peleg"
-        };
-
-
-        String selectedMember = teamMembers[random.nextInt(teamMembers.length)];
-
-        // הצגת השם בזמן INIT
-        while (!isStarted() && !isStopRequested()) {
-            telemetry.addLine("=== TEAM SELECTED ===");
-            telemetry.addData("Member", selectedMember);
-            telemetry.update();
-        }
-
-        waitForStart();
-        if (isStopRequested()) return;
-
-        // --- כל הקוד של המנועים, Trajectories וכו' כאן ---
         drive = new SampleMecanumDrive(hardwareMap);
+
+        // הגדרת חומרה
         intakeMotor = hardwareMap.get(DcMotor.class, "intake");
         shoot_u = hardwareMap.get(DcMotorEx.class, "shoot_u");
         shoot_d = hardwareMap.get(DcMotorEx.class, "shoot_d");
-        //  s_hood = hardwareMap.get(Servo.class, "s_hood");
+        transfer_motor = hardwareMap.get(DcMotorEx.class, "transfer_motor");
         s_transfer = hardwareMap.get(Servo.class, "s_transfer");
         s_block = hardwareMap.get(Servo.class, "s_block");
 
@@ -89,118 +60,147 @@ public class Autonomous_goal_blue extends LinearOpMode {
         shoot_u.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidf);
         shoot_d.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidf);
 
-        Pose2d startPose = new Pose2d(53.421, 47.47, Math.toRadians(52));
         drive.setPoseEstimate(startPose);
 
+        // בחירת חבר צוות רנדומלי (הקוד המקורי שלך)
+        Random random = new Random();
+        String[] teamMembers = {"yanai", "amit", "nir", "yuri", "shvadi", "uri", "ya'ari", "tamir", "yogev", "neta", "benya", "peleg"};
+        String selectedMember = teamMembers[random.nextInt(teamMembers.length)];
+
+        // לולאת Init - מציגה מיקום נוכחי וחבר צוות
+        while (!isStarted() && !isStopRequested()) {
+            telemetry.addLine("=== SYSTEM READY ===");
+            telemetry.addData("Selected Member", selectedMember);
+            updateTelemetryPose();
+        }
+
+        waitForStart();
+        if (isStopRequested()) return;
+
+        // התחלת האוטונומוס
         s_block.setPosition(B_CLOSE);
         s_transfer.setPosition(CLOSE_POS);
-    //    s_hood.setPosition(1.0);
 
         shoot_u.setVelocity(SHOOT_TARGET_VEL);
         shoot_d.setVelocity(SHOOT_TARGET_VEL);
 
-        // --- כל שאר הקוד שלך כמו Trajectories, shoot() וכו' ---
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(31.504, 19.1, Math.toRadians(52)))
-                        .build()
-        );
+        // המתנה לטעינת יורה
+        shootTimer.reset();
+        while (shootTimer.milliseconds() < 1000 && opModeIsActive()) {
+            drive.update();
+            updateTelemetryPose();
+        }
 
+        // --- תנועה וירי 1 ---
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(31.504, 19.1, Math.toRadians(52)))
+                .build());
         shoot();
 
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(3, 18, Math.toRadians(90)))
-                        .build()
-        );
+        // --- איסוף 1 ---
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(3, 18, Math.toRadians(90)))
+                .build());
 
-        intakeMotor.setPower(-0.8); /// כניסה לאיסוף 1
-
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(4, 60, Math.toRadians(90)))
-                        .build()
-        );
-
+        intakeMotor.setPower(-0.8);
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(4, 60, Math.toRadians(90)))
+                .build());
         intakeMotor.setPower(0);
 
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(38, 13, Math.toRadians(52)))
-                        .build()
-        );
-
+        // --- ירי 2 ---
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(38, 13, Math.toRadians(52)))
+                .build());
         shoot();
 
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(-25, 15, Math.toRadians(90)))
-                        .build()
-        );
+        // --- איסוף 2 ---
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(-25, 15, Math.toRadians(90)))
+                .build());
 
-        intakeMotor.setPower(-0.8); /// כניסה לאיסוף 2
+        intakeMotor.setPower(-0.8);
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(-20, 67, Math.toRadians(90)))
+                .build());
 
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(-20, 67, Math.toRadians(90)))
-                        .build()
-        );
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(-16, 50, Math.toRadians(90)))
+                .build());
 
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(-16, 50, Math.toRadians(90)))
-                        .build()
-        );
-
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(42, 5, Math.toRadians(52)))
-                        .build()
-        );
-
+        // --- ירי 3 ---
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(42, 5, Math.toRadians(52)))
+                .build());
         shoot();
 
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(-60, 15, Math.toRadians(90)))
-                        .build()
-        );
+        // --- איסוף 3 ---
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(-60, 15, Math.toRadians(90)))
+                .build());
 
-        intakeMotor.setPower(-0.8); /// כניסה לאיסוף 3
+        intakeMotor.setPower(-0.8);
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(-40, 70, Math.toRadians(90)))
+                .build());
 
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(-40, 70, Math.toRadians(90)))
-                        .build()
-        );
-
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .lineToLinearHeading(new Pose2d(48, 0, Math.toRadians(52)))
-                        .build()
-        );
-
+        // --- ירי 4 ---
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(48, 0, Math.toRadians(52)))
+                .build());
         shoot();
 
+        // חנייה
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(40, 8, Math.toRadians(-90)))
+                .build());
 
+        // כיבוי מערכות
         shoot_u.setVelocity(0);
         shoot_d.setVelocity(0);
         s_transfer.setPosition(CLOSE_POS);
 
         PoseStorage.currentPose = drive.getPoseEstimate();
-
-        telemetry.addData("Status", "Complete - Pose Saved");
-        telemetry.update();
+        telemetry.addLine("Autonomous Complete");
+        updateTelemetryPose();
     }
 
     private void shoot() {
+        shootTimer.reset();
         s_block.setPosition(B_OPEN);
-        sleep(100);
-        intakeMotor.setPower(-1.0);
-        sleep(1000);
+        while (shootTimer.milliseconds() < 300 && opModeIsActive()) {
+            drive.update();
+            updateTelemetryPose();
+        }
+
+        transfer_motor.setPower(-1.0);
+        intakeMotor.setPower(-1);
+
+        shootTimer.reset();
+        while (shootTimer.milliseconds() < 1000 && opModeIsActive()) {
+            drive.update();
+            updateTelemetryPose();
+        }
+
         s_transfer.setPosition(OPEN_POS);
-        sleep(300);
+        shootTimer.reset();
+        while (shootTimer.milliseconds() < 300 && opModeIsActive()) {
+            drive.update();
+            updateTelemetryPose();
+        }
+
         s_transfer.setPosition(CLOSE_POS);
         intakeMotor.setPower(0);
+        transfer_motor.setPower(0);
+        s_block.setPosition(B_CLOSE);
+    }
+
+    // פונקציה לעדכון מיקום בטלמטריה
+    private void updateTelemetryPose() {
+        Pose2d currentPose = drive.getPoseEstimate();
+        telemetry.addData("Robot X", "%.2f", currentPose.getX());
+        telemetry.addData("Robot Y", "%.2f", currentPose.getY());
+        telemetry.addData("Heading", "%.2f°", Math.toDegrees(currentPose.getHeading()));
+        telemetry.update();
     }
 }
