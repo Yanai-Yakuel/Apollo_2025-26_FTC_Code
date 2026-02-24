@@ -1,5 +1,9 @@
 package org.firstinspires.ftc.teamcode.drive;
 
+import org.firstinspires.ftc.teamcode.drive.opmode.DriveConstants;
+import org.firstinspires.ftc.teamcode.drive.opmode.PoseStorage;
+import org.firstinspires.ftc.teamcode.drive.opmode.SampleMecanumDrive;
+
 import com.acmerobotics.roadrunner.geometry.Pose2d;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
@@ -8,124 +12,148 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
-import java.lang.Thread;
+import com.qualcomm.robotcore.util.ElapsedTime;
+import java.util.Random;
 
-@Autonomous(name = "far 2026", group = "far")  // group שונה!
-public class autonomous_far extends LinearOpMode {
-
+@Autonomous(name = "autonomous_far_RED", group = "drive")
+public class autonomous_far_red extends LinearOpMode {
     private SampleMecanumDrive drive;
-    private DcMotor intakeMotor, transferMotor;
+    private DcMotor intakeMotor, transfer_motor;
     private DcMotorEx shoot_u, shoot_d;
-    private Servo s_transfer, s_hood;
+    private Servo s_block, s_hood;
 
-    // Thread לשמירה על שוטר ON רק בזמן הריצה
-    private Thread shooterThread;
-
-    // הגדרות ירי - PID
-    public static double P = 30, I = 2, D = 0, F = 13.5;
-    public static double SHOOT_TARGET_RPM = 6000;
+    public static double P = 100, I = 1.2, D = 3, F = 0;
+    public static double SHOOT_TARGET_RPM = 3050;
     private final double SHOOT_TARGET_VEL = (SHOOT_TARGET_RPM * 28.0) / 60.0;
+    public static double B_OPEN = 0.556, B_CLOSE = 0.501;
+    public static double hood_open = 0.42;
 
-    private double close_pos = 0.7;
-    private double open_pos = 0.92;
+    private ElapsedTime shootTimer = new ElapsedTime();
+
+    // התחלה ב-Y שלילי
+    Pose2d startPose = new Pose2d(-64, -15, Math.toRadians(0));
 
     @Override
     public void runOpMode() throws InterruptedException {
-        // --- אתחול חומרה - בלי drive עדיין ---
+        drive = new SampleMecanumDrive(hardwareMap);
+
         intakeMotor = hardwareMap.get(DcMotor.class, "intake");
-        transferMotor = hardwareMap.get(DcMotor.class, "transfer");
         shoot_u = hardwareMap.get(DcMotorEx.class, "shoot_u");
         shoot_d = hardwareMap.get(DcMotorEx.class, "shoot_d");
+        transfer_motor = hardwareMap.get(DcMotorEx.class, "transfer_motor");
+        s_block = hardwareMap.get(Servo.class, "s_block");
         s_hood = hardwareMap.get(Servo.class, "s_hood");
-        s_transfer = hardwareMap.get(Servo.class, "s_transfer");
 
-        // הגדרות מנועי ירי
         shoot_u.setDirection(DcMotorSimple.Direction.REVERSE);
+        shoot_d.setDirection(DcMotorSimple.Direction.FORWARD);
+
         shoot_u.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shoot_d.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        shoot_u.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
-        shoot_d.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
 
-        // ✅ כבוי מוחלט ב-INIT - לפני drive!
-        shoot_u.setPower(0);      // חסימת כוח
-        shoot_d.setPower(0);
-        shoot_u.setVelocity(0);
-        shoot_d.setVelocity(0);
+        PIDFCoefficients pidf = new PIDFCoefficients(P, I, D, F);
+        shoot_u.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidf);
+        shoot_d.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidf);
 
-        s_transfer.setPosition(open_pos);
-        s_hood.setPosition(1.0);
+        drive.setPoseEstimate(startPose);
 
-        telemetry.addData("ShootU", "%.0f", shoot_u.getVelocity());
-        telemetry.addData("ShootD", "%.0f", shoot_d.getVelocity());
-        telemetry.addLine("✅ Shooter OFF - Waiting...");
-        telemetry.update();
+        String[] teamMembers = {"yanai", "amit", "nir", "yuri", "shvadi", "uri", "ya'ari", "tamir", "yogev", "neta", "benya", "peleg"};
+        String selectedMember = teamMembers[new Random().nextInt(teamMembers.length)];
+
+        while (!isStarted() && !isStopRequested()) {
+            telemetry.addData("Ready for RED", selectedMember);
+            updateTelemetryPose();
+        }
 
         waitForStart();
         if (isStopRequested()) return;
 
-        // 🔥 עכשיו רק - drive + Thread
-        drive = new SampleMecanumDrive(hardwareMap);  // ← ה-driver רק כאן!
-        Pose2d startPose = new Pose2d(50.3, 51.7, Math.toRadians(-45));
-        drive.setPoseEstimate(startPose);
+        s_block.setPosition(B_CLOSE);
+        s_hood.setPosition(hood_open);
 
-        // הפעלת Thread
-        shooterThread = new Thread(() -> {
-            while (opModeIsActive() && !isStopRequested()) {
-                shoot_u.setVelocity(SHOOT_TARGET_VEL);
-                shoot_d.setVelocity(SHOOT_TARGET_VEL);
-                try { Thread.sleep(10); } catch (InterruptedException e) { break; }
-            }
-        });
-        shooterThread.start();
+        start_shooter();
 
-        sleep(5000);
+        // המתנה לירי ראשון (כמו בקוד המקור)
+        sleep(4000);
 
-        shootRings(4);
+        // ירי 1: Y שלילי, זווית שלילית (25 -> -25)
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(-61.02844, -18.175, Math.toRadians(-25)))
+                .build());
 
-        sleep(500);
+        shoot();
 
-        // נסיעה ראשונה: 43 אינץ' אחורה
-        drive.followTrajectory(
-                drive.trajectoryBuilder(drive.getPoseEstimate())
-                        .forward(15)
-                        .build()
-        );
+        // כניסה לאיסוף: Y שלילי, זווית שלילית (90 -> -90)
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(-32, -30.93, Math.toRadians(-90)))
+                .build());
 
-        // ירי ראשון - 4 טבעות
+        intakeMotor.setPower(-0.9);
+        transfer_motor.setPower(0.8);
+        start_shooter();
 
+        // נסיעה לאיסוף ערימה
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(-34, -63.45, Math.toRadians(-90)),
+                        SampleMecanumDrive.getVelocityConstraint(40, DriveConstants.MAX_ANG_VEL, DriveConstants.TRACK_WIDTH),
+                        SampleMecanumDrive.getAccelerationConstraint(40))
+                .build());
 
-        // --- סיום האוטונומי ---
-        if (shooterThread != null && shooterThread.isAlive()) {
-            shooterThread.interrupt();
-        }
-        shoot_u.setVelocity(0);
-        shoot_d.setVelocity(0);
         intakeMotor.setPower(0);
-        transferMotor.setPower(0);
+        transfer_motor.setPower(0);
 
-        telemetry.addData("Status", "Complete - Shooter OFF");
-        telemetry.update();
+        // חזרה לירי 2: Y שלילי, זווית שלילית (20 -> -20)
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(-65, -25, Math.toRadians(-20)))
+                .build());
+        shoot();
+
+        // חזרה לנקודת סיום/איסוף
+        drive.followTrajectory(drive.trajectoryBuilder(drive.getPoseEstimate())
+                .lineToLinearHeading(new Pose2d(-36.7224, -30.93, Math.toRadians(-90)))
+                .build());
+
+        stopRobot();
     }
 
-    private void shootRings(int count) throws InterruptedException {
-        for (int i = 0; i < count; i++) {
-            if (isStopRequested()) return;
+    private void start_shooter() {
+        shoot_u.setVelocity(SHOOT_TARGET_VEL);
+        shoot_d.setVelocity(SHOOT_TARGET_VEL);
+    }
 
-            // העלאת טבעת למעלה
-            intakeMotor.setPower(-1.0);
-            transferMotor.setPower(1.0);
-            sleep(600);
-
-            // לחיצה על הטבעת לתוך הגלגלים
-            s_transfer.setPosition(close_pos);
-            intakeMotor.setPower(0);
-            sleep(450);
-
-            // שחרור הסרוו חזרה
-            s_transfer.setPosition(open_pos);
-            sleep(400);
+    private void shoot() {
+        shootTimer.reset();
+        s_block.setPosition(B_OPEN);
+        while (shootTimer.milliseconds() < 300 && opModeIsActive()) {
+            drive.update();
+        }
+        transfer_motor.setPower(0.7);
+        intakeMotor.setPower(-0.7);
+        shootTimer.reset();
+        while (shootTimer.milliseconds() < 1000 && opModeIsActive()) {
+            drive.update();
+        }
+        shootTimer.reset();
+        while (shootTimer.milliseconds() < 300 && opModeIsActive()) {
+            drive.update();
         }
         intakeMotor.setPower(0);
-        transferMotor.setPower(0);
+        transfer_motor.setPower(0);
+        s_block.setPosition(B_CLOSE);
+    }
+
+    private void stopRobot() {
+        shoot_u.setVelocity(0);
+        shoot_d.setVelocity(0);
+        PoseStorage.currentPose = drive.getPoseEstimate();
+        telemetry.addLine("Autonomous Complete - Red Side");
+        updateTelemetryPose();
+    }
+
+    private void updateTelemetryPose() {
+        Pose2d currentPose = drive.getPoseEstimate();
+        telemetry.addData("X", "%.2f", currentPose.getX());
+        telemetry.addData("Y", "%.2f", currentPose.getY());
+        telemetry.addData("Heading", "%.2f°", Math.toDegrees(currentPose.getHeading()));
+        telemetry.update();
     }
 }
