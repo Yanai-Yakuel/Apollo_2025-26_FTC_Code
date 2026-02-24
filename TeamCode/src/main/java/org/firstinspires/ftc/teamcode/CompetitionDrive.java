@@ -2,7 +2,6 @@ package org.firstinspires.ftc.teamcode.drive;
 
 import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.config.Config;
-import com.acmerobotics.dashboard.telemetry.TelemetryPacket;
 import com.acmerobotics.roadrunner.geometry.Pose2d;
 import com.acmerobotics.roadrunner.util.Angle;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
@@ -13,9 +12,11 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.drive.opmode.PoseStorage;
+import org.firstinspires.ftc.teamcode.drive.opmode.SampleMecanumDrive;
+
 
 @Config
-@TeleOp(name = "Competition_2026_Final_Fixed", group = "drive")
+@TeleOp(name = "Competition_2026", group = "drive")
 public class CompetitionDrive extends LinearOpMode {
 
     private DcMotor intakeMotor;
@@ -35,7 +36,7 @@ public class CompetitionDrive extends LinearOpMode {
     public static double HOLD_KI = 0.006;
     public static double HOLD_KD = 0.15;
     public static double HOLD_KH = 0.5;
-    public static double HOLD_MIN_PUSH = 0.07; // הכוח המינימלי למניעת עצירה ב-3 אינץ'
+    public static double HOLD_MIN_PUSH = 0.07;
 
     private double xIntegral = 0, yIntegral = 0;
 
@@ -55,6 +56,7 @@ public class CompetitionDrive extends LinearOpMode {
     private boolean holding = false;
     private boolean readyToShoot = false;
     private boolean lastGamepad1B = false;
+
 
     private FtcDashboard dashboard;
 
@@ -97,7 +99,6 @@ public class CompetitionDrive extends LinearOpMode {
 
             s_hood.setPosition(hood_open);
 
-            // HEADING RESET
             if (gamepad1.back) drive.setPoseEstimate(new Pose2d(pose.getX(), pose.getY(), 0));
 
             // INTAKE & TRANSFER
@@ -106,18 +107,15 @@ public class CompetitionDrive extends LinearOpMode {
             // SHOOTER
             handleShooter(pose);
 
-
-            // --- DRIVE & HOLDING SELECTION ---
-
-            if (gamepad1.a) {  /// SHOOT 1
+            if (gamepad1.a) {
                 targetPose = new Pose2d(19.373, 18.69, Math.toRadians(315));
                 if (!holding) resetIntegrals();
-                 holding = true;
-            } else if (gamepad1.y) { /// shoot 2
+                holding = true;
+            } else if (gamepad1.y) {
                 targetPose = new Pose2d(50.88, 6.13, Math.toRadians(279));
                 if (!holding) resetIntegrals();
                 holding = true;
-            } else if (gamepad1.x) { /// GATE
+            } else if (gamepad1.x) {
                 targetPose = new Pose2d(50.88, 6.13, Math.toRadians(81.405));
                 if (!holding) resetIntegrals();
                 holding = true;
@@ -135,11 +133,13 @@ public class CompetitionDrive extends LinearOpMode {
             sendTelemetry(pose);
         }
     }
-    // --- HELPER METHODS ---
+
+
     private void resetIntegrals() {
         xIntegral = 0;
         yIntegral = 0;
     }
+
 
     private void executePD(Pose2d pose, Pose2d poseVelocity) {
         double xError = targetPose.getX() - pose.getX();
@@ -177,25 +177,28 @@ public class CompetitionDrive extends LinearOpMode {
 
         drive.setWeightedDrivePower(new Pose2d(rotX, rotY, rx));
     }
-    // איסוף
+
+
     private void handleIntake() {
-        if (currentShootState == ShootState.IDLE) {
-            if (gamepad1.left_trigger > 0.1) {
-                intakeMotor.setPower(0.8);
-                transfer_motor.setPower(-0.3);
-            } else if (gamepad1.right_trigger > 0.1) {
-                intakeMotor.setPower(-0.8);
-                transfer_motor.setPower(0.8);
-            } else {
-                intakeMotor.setPower(0);
-                transfer_motor.setPower(0);
-            }
+        if (gamepad1.left_trigger > 0.1) {
+            currentShootState = ShootState.IDLE;
+            s_block.setPosition(B_CLOSE);
+
+            // פליטה (Outtake)
+            intakeMotor.setPower(0.8);
+            transfer_motor.setPower(-0.3);
+        } else if (gamepad1.right_trigger > 0.1) {
+            // איסוף (Intake)
+            intakeMotor.setPower(-0.8);
+            transfer_motor.setPower(0.8);
+        } else if (currentShootState == ShootState.IDLE) {
+            intakeMotor.setPower(0);
+            transfer_motor.setPower(0);
         }
     }
 
     private void handleShooter(Pose2d pose) {
-        if (gamepad1.b
-                && !lastGamepad1B) {
+        if (gamepad1.b && !lastGamepad1B) {
             readyToShoot = !readyToShoot;
             if (readyToShoot) updatePIDCoefficients();
         }
@@ -244,10 +247,12 @@ public class CompetitionDrive extends LinearOpMode {
         }
     }
 
+
     private void updatePIDCoefficients() {
         shoot_u.setVelocityPIDFCoefficients(P, I, D, F);
         shoot_d.setVelocityPIDFCoefficients(P, I, D, F);
     }
+
 
     private void sendTelemetry(Pose2d pose) {
         telemetry.addData("Status", holding ? "HOLDING" : "MANUAL");
@@ -256,6 +261,9 @@ public class CompetitionDrive extends LinearOpMode {
         displayPose();
         telemetry.update();
     }
+
+
+
     private void displayPose() {
         Pose2d currentPose = drive.getPoseEstimate();
         telemetry.addData("Pose X", "%.2f", currentPose.getX());
