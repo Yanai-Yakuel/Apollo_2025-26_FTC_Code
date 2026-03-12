@@ -303,4 +303,8 @@ public class CompetitionDrive extends LinearOpMode {
         telemetry.addData("Heading", "%.1f°", Math.toDegrees(pose.getHeading()));
         telemetry.update();
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> f4f6a4e3ebebf3a2be6e4c06e8fb9f1abd3ce00f
