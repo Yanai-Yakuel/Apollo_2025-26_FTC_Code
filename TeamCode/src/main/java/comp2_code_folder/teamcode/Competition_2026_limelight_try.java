@@ -18,7 +18,6 @@ import org.firstinspires.ftc.teamcode.drive.opmode.PoseStorage;
 import org.firstinspires.ftc.teamcode.drive.opmode.SampleMecanumDrive;
 
 
-
 @Config
 @TeleOp(name = "Competition_2026_limelight", group = "drive")
 public class CompetitionDrive extends LinearOpMode {
@@ -34,7 +33,7 @@ public class CompetitionDrive extends LinearOpMode {
     public static Pose2d TARGET_POSE_RED = new Pose2d(-26.7, 24.0175, Math.toRadians(135));
     public static final double M_TO_IN = 39.37;
 
-    //  PID drive
+    // PID Drive
     public static double HOLD_KP = 0.045;
     public static double HOLD_KI = 0.003;
     public static double HOLD_KD = 0.18;
@@ -44,21 +43,20 @@ public class CompetitionDrive extends LinearOpMode {
     private double xIntegral = 0;
     private double yIntegral = 0;
 
-
-    // PID SHOOTER
-
+    // PID Shooter
     public static double P = 100, I = 1.2, D = 3, F = 0;
+    public static double SHOOT_TARGET_RPM = 2250;
+    public static final double TICKS_PER_REV = 28.0;
+    public static final double RPM_TOLERANCE = 189;
 
-    public static double DRIVE_POWER = 0.8;
-    public static double ROTATION_POWER = 0.8;
+    // Drive
+    public static double DRIVE_POWER = 0.9;
+    public static double ROTATION_POWER = 0.9;
 
+    // Servo
     public static double B_OPEN = 0.556;
     public static double B_CLOSE = 0.501;
     public static double hood_open = 0.47;
-
-    // Shooter PID
-    public static double SHOOT_TARGET_RPM = 2250;
-    public static final double TICKS_PER_REV = 28.0;
 
     enum ShootState { IDLE, OPEN_BLOCK, RUN_TRANSFER }
     ShootState currentShootState = ShootState.IDLE;
@@ -67,41 +65,30 @@ public class CompetitionDrive extends LinearOpMode {
     private boolean limelightAlign = false;
     private boolean readyToShoot = false;
     private boolean lastGamepad1B = false;
-
-    // X Edge Trigger
     private boolean lastGamepad1X = false;
-
-    // Manual offset
+    private boolean lastGamepad1Y = false;
     private double manualAngleOffset = 0;
 
     @Override
     public void runOpMode() throws InterruptedException {
 
-        // Drive
         drive = new SampleMecanumDrive(hardwareMap);
         drive.setPoseEstimate(PoseStorage.currentPose);
 
-        // Hardware
-        intakeMotor = hardwareMap.get(DcMotor.class, "intake");
-        shoot_u = hardwareMap.get(DcMotorEx.class, "shoot_u");
-        shoot_d = hardwareMap.get(DcMotorEx.class, "shoot_d");
+        intakeMotor    = hardwareMap.get(DcMotor.class,   "intake");
+        shoot_u        = hardwareMap.get(DcMotorEx.class, "shoot_u");
+        shoot_d        = hardwareMap.get(DcMotorEx.class, "shoot_d");
         transfer_motor = hardwareMap.get(DcMotorEx.class, "transfer_motor");
-        s_block = hardwareMap.get(Servo.class, "s_block");
-        s_hood = hardwareMap.get(Servo.class, "s_hood");
-
+        s_block        = hardwareMap.get(Servo.class,     "s_block");
+        s_hood         = hardwareMap.get(Servo.class,     "s_hood");
 
         shoot_u.setDirection(DcMotorSimple.Direction.FORWARD);
         shoot_d.setDirection(DcMotorSimple.Direction.FORWARD);
-
         shoot_u.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shoot_d.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
+        updatePIDCoefficients();
 
-        shoot_u.setVelocityPIDFCoefficients(P, I, D, F);
-        shoot_d.setVelocityPIDFCoefficients(P, I, D, F);
-
-
-        //-------------------------------------------------
         // Limelight
         try {
             limelight = hardwareMap.get(Limelight3A.class, "limelight");
@@ -126,21 +113,17 @@ public class CompetitionDrive extends LinearOpMode {
 
             s_hood.setPosition(hood_open);
 
+            // Limelight
             boolean tagVisible = false;
 
-            // Limelight update only during Align
-            if (limelight != null) {
-                LLResult result = limelight.getLatestResult();
-                if (result != null && result.isValid()) {
-                    tagVisible = true;
-                    if (limelightAlign) updateBotPose(result);
-                }
+                if (limelight != null) {
+            LLResult result = limelight.getLatestResult();
+            if (result != null && result.isValid()) {
+                tagVisible = true;
             }
-            
-            //----------------LIME_LIGHT_END_HERE--------------
+        }
 
-
-            // X button: reset heading to 90° (Edge trigger)
+            // X button: reset heading to 90°
             if (gamepad1.x && !lastGamepad1X) {
                 drive.setPoseEstimate(new Pose2d(
                         currentPose.getX(),
@@ -150,23 +133,27 @@ public class CompetitionDrive extends LinearOpMode {
             }
             lastGamepad1X = gamepad1.x;
 
-            // Y button: start Limelight Align
-            if (gamepad1.y && !limelightAlign) {
-                limelightAlign = true;
-                resetIntegrals();
+            if (gamepad1.y && !lastGamepad1Y) {
+                if (limelight != null) {
+                    LLResult result = limelight.getLatestResult();
+                    if (result != null && result.isValid()) {
+                        updateBotPose(result); // עדכן פוזה מהתג
+                        limelightAlign = true;
+                        resetIntegrals();
+                    }
+                    // אם לא ראה תג - לא עושה כלום
+                }
             }
+            lastGamepad1Y = gamepad1.y;
 
             // Any stick input cancels align
             if (Math.abs(gamepad1.left_stick_y) > 0.15 ||
                     Math.abs(gamepad1.left_stick_x) > 0.15 ||
                     Math.abs(gamepad1.right_stick_x) > 0.15) {
                 limelightAlign = false;
-                // Update manual offset to current heading for smooth Field Oriented
                 manualAngleOffset = currentPose.getHeading() - Math.toRadians(90);
             }
-            //----------------------
 
-            // Execute PD or Manual drive
             if (limelightAlign) {
                 executePD(currentPose, poseVelocity, TARGET_POSE_RED);
             } else {
@@ -181,13 +168,11 @@ public class CompetitionDrive extends LinearOpMode {
         if (limelight != null) limelight.stop();
     }
 
-    
-
     private void updateBotPose(LLResult result) {
         Pose3D botPose = result.getBotpose();
         if (botPose != null && botPose.getPosition() != null) {
-            double x = botPose.getPosition().x * M_TO_IN;
-            double y = botPose.getPosition().y * M_TO_IN;
+            double x   = botPose.getPosition().x * M_TO_IN;
+            double y   = botPose.getPosition().y * M_TO_IN;
             double yaw = Math.toRadians(botPose.getOrientation().getYaw());
             drive.setPoseEstimate(new Pose2d(x, y, yaw));
         }
@@ -197,6 +182,12 @@ public class CompetitionDrive extends LinearOpMode {
         xIntegral = 0;
         yIntegral = 0;
     }
+
+    private void updatePIDCoefficients() {
+        shoot_u.setVelocityPIDFCoefficients(P, I, D, F);
+        shoot_d.setVelocityPIDFCoefficients(P, I, D, F);
+    }
+
     private void executePD(Pose2d currentPose, Pose2d vel, Pose2d target) {
 
         double xErr = target.getX() - currentPose.getX();
@@ -214,38 +205,32 @@ public class CompetitionDrive extends LinearOpMode {
             return;
         }
 
-        // אינטגרלים רק אם רחוק מספיק
         if (Math.abs(xErr) < 5) xIntegral = Math.max(-10, Math.min(10, xIntegral + xErr * 0.02));
         else xIntegral = 0;
 
         if (Math.abs(yErr) < 5) yIntegral = Math.max(-10, Math.min(10, yIntegral + yErr * 0.02));
         else yIntegral = 0;
 
-        // פקודת PD
-        double xCmd = xErr * HOLD_KP + xIntegral * HOLD_KI - vel.getX() * (HOLD_KD * 0.5); // KD נמוך יותר
+        double xCmd = xErr * HOLD_KP + xIntegral * HOLD_KI - vel.getX() * (HOLD_KD * 0.5);
         double yCmd = yErr * HOLD_KP + yIntegral * HOLD_KI - vel.getY() * (HOLD_KD * 0.5);
 
-        // Ramp-down לפי מרחק
-        double maxSpeed = Math.min(0.7, distance * 0.1); // קרוב -> יותר איטי
+        double maxSpeed = Math.min(0.7, distance * 0.1);
 
-        // Field Oriented
         double heading = currentPose.getHeading();
         double rotX = xCmd * Math.cos(-heading) - yCmd * Math.sin(-heading);
         double rotY = xCmd * Math.sin(-heading) + yCmd * Math.cos(-heading);
 
-        // הגבלת מהירות לפי ramp-down
         rotX = Math.max(-maxSpeed, Math.min(maxSpeed, rotX));
         rotY = Math.max(-maxSpeed, Math.min(maxSpeed, rotY));
 
-        // סיבוב
-        double rotPower = Math.max(-0.5, Math.min(0.5, hErr * HOLD_KH)); // מוגבל כדי למנוע קפיצות
+        double rotPower = Math.max(-0.5, Math.min(0.5, hErr * HOLD_KH));
         drive.setWeightedDrivePower(new Pose2d(rotX, rotY, rotPower));
     }
 
     private void driveManual(Pose2d pose) {
         double inputY = -gamepad1.left_stick_y * DRIVE_POWER;
-        double inputX = gamepad1.left_stick_x * DRIVE_POWER;
-        double rx = -gamepad1.right_stick_x * ROTATION_POWER;
+        double inputX =  gamepad1.left_stick_x * DRIVE_POWER;
+        double rx     = -gamepad1.right_stick_x * ROTATION_POWER;
 
         double botHeading = pose.getHeading() - manualAngleOffset;
         double rotX = inputX * Math.cos(-botHeading) - inputY * Math.sin(-botHeading);
@@ -270,7 +255,10 @@ public class CompetitionDrive extends LinearOpMode {
     }
 
     private void handleShooter() {
-        if (gamepad1.b && !lastGamepad1B) readyToShoot = !readyToShoot;
+        if (gamepad1.b && !lastGamepad1B) {
+            readyToShoot = !readyToShoot;
+            if (readyToShoot) updatePIDCoefficients();
+        }
         lastGamepad1B = gamepad1.b;
 
         double targetVel = (SHOOT_TARGET_RPM * TICKS_PER_REV) / 60.0;
@@ -282,10 +270,16 @@ public class CompetitionDrive extends LinearOpMode {
             shoot_d.setVelocity(0);
         }
 
+        double rpmU = (Math.abs(shoot_u.getVelocity()) * 60.0) / TICKS_PER_REV;
+        double rpmD = (Math.abs(shoot_d.getVelocity()) * 60.0) / TICKS_PER_REV;
+        boolean shooterReady = readyToShoot &&
+                (Math.abs(SHOOT_TARGET_RPM - rpmU) < RPM_TOLERANCE) &&
+                (Math.abs(SHOOT_TARGET_RPM - rpmD) < RPM_TOLERANCE);
+
         switch (currentShootState) {
             case IDLE:
                 s_block.setPosition(B_CLOSE);
-                if (gamepad1.dpad_up && readyToShoot) {
+                if (gamepad1.dpad_up && shooterReady) {
                     shootTimer.reset();
                     s_block.setPosition(B_OPEN);
                     currentShootState = ShootState.OPEN_BLOCK;
@@ -311,9 +305,9 @@ public class CompetitionDrive extends LinearOpMode {
     }
 
     private void sendTelemetry(Pose2d pose, boolean tagVisible, boolean aligning) {
-        telemetry.addData("Mode", aligning ? "ALIGNING" : "MANUAL");
-        telemetry.addData("Source", tagVisible ? "BOTPOSE" : "ODOMETRY");
-        telemetry.addData("Target", "(-26.7, 24.0)");
+        telemetry.addData("Mode",    aligning   ? "ALIGNING" : "MANUAL");
+        telemetry.addData("Source",  tagVisible ? "BOTPOSE"  : "ODOMETRY");
+        telemetry.addData("Target",  "(-26.7, 24.0)");
         telemetry.addData("Current", "(%.1f, %.1f)", pose.getX(), pose.getY());
         if (aligning) {
             telemetry.addData("X Error", "%.1f", TARGET_POSE_RED.getX() - pose.getX());
