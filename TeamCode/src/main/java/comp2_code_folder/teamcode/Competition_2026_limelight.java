@@ -17,10 +17,9 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.drive.opmode.PoseStorage;
 import org.firstinspires.ftc.teamcode.drive.opmode.SampleMecanumDrive;
 
-
 @Config
 @TeleOp(name = "Competition_2026_limelight", group = "drive")
-public class CompetitionDrive extends LinearOpMode {
+public class Competition_2026_limelight extends LinearOpMode {
 
     // Hardware
     private DcMotor intakeMotor;
@@ -58,7 +57,10 @@ public class CompetitionDrive extends LinearOpMode {
     public static double B_CLOSE = 0.501;
     public static double hood_open = 0.47;
 
-    enum ShootState { IDLE, OPEN_BLOCK, RUN_TRANSFER }
+    enum ShootState {
+        IDLE, OPEN_BLOCK, RUN_TRANSFER
+    }
+
     ShootState currentShootState = ShootState.IDLE;
     private ElapsedTime shootTimer = new ElapsedTime();
 
@@ -74,12 +76,12 @@ public class CompetitionDrive extends LinearOpMode {
         drive = new SampleMecanumDrive(hardwareMap);
         drive.setPoseEstimate(PoseStorage.currentPose);
 
-        intakeMotor    = hardwareMap.get(DcMotor.class,   "intake");
-        shoot_u        = hardwareMap.get(DcMotorEx.class, "shoot_u");
-        shoot_d        = hardwareMap.get(DcMotorEx.class, "shoot_d");
+        intakeMotor = hardwareMap.get(DcMotor.class, "intake");
+        shoot_u = hardwareMap.get(DcMotorEx.class, "shoot_u");
+        shoot_d = hardwareMap.get(DcMotorEx.class, "shoot_d");
         transfer_motor = hardwareMap.get(DcMotorEx.class, "transfer_motor");
-        s_block        = hardwareMap.get(Servo.class,     "s_block");
-        s_hood         = hardwareMap.get(Servo.class,     "s_hood");
+        s_block = hardwareMap.get(Servo.class, "s_block");
+        s_hood = hardwareMap.get(Servo.class, "s_hood");
 
         shoot_u.setDirection(DcMotorSimple.Direction.FORWARD);
         shoot_d.setDirection(DcMotorSimple.Direction.FORWARD);
@@ -106,7 +108,8 @@ public class CompetitionDrive extends LinearOpMode {
             drive.update();
             Pose2d currentPose = drive.getPoseEstimate();
             Pose2d poseVelocity = drive.getPoseVelocity();
-            if (poseVelocity == null) poseVelocity = new Pose2d();
+            if (poseVelocity == null)
+                poseVelocity = new Pose2d();
 
             s_hood.setPosition(hood_open);
 
@@ -124,8 +127,7 @@ public class CompetitionDrive extends LinearOpMode {
                 drive.setPoseEstimate(new Pose2d(
                         currentPose.getX(),
                         currentPose.getY(),
-                        Math.toRadians(90)
-                ));
+                        Math.toRadians(90)));
             }
             lastGamepad1X = gamepad1.x;
 
@@ -150,7 +152,13 @@ public class CompetitionDrive extends LinearOpMode {
             }
 
             if (limelightAlign) {
-                executePD(currentPose, poseVelocity, TARGET_POSE_RED);
+                // Tag-loss safety: if tag disappears during align, stop
+                if (!tagVisible) {
+                    limelightAlign = false;
+                    drive.setWeightedDrivePower(new Pose2d(0, 0, 0));
+                } else {
+                    executePID(currentPose, poseVelocity, TARGET_POSE_RED);
+                }
             } else {
                 driveManual();
             }
@@ -160,14 +168,15 @@ public class CompetitionDrive extends LinearOpMode {
             sendTelemetry(currentPose, tagVisible, limelightAlign);
         }
 
-        if (limelight != null) limelight.stop();
+        if (limelight != null)
+            limelight.stop();
     }
 
     private void updateBotPose(LLResult result) {
         Pose3D botPose = result.getBotpose();
         if (botPose != null && botPose.getPosition() != null) {
-            double x   = botPose.getPosition().x * M_TO_IN;
-            double y   = botPose.getPosition().y * M_TO_IN;
+            double x = botPose.getPosition().x * M_TO_IN;
+            double y = botPose.getPosition().y * M_TO_IN;
             double yaw = Math.toRadians(botPose.getOrientation().getYaw());
             drive.setPoseEstimate(new Pose2d(x, y, yaw));
         }
@@ -183,7 +192,7 @@ public class CompetitionDrive extends LinearOpMode {
         shoot_d.setVelocityPIDFCoefficients(P, I, D, F);
     }
 
-    private void executePD(Pose2d currentPose, Pose2d vel, Pose2d target) {
+    private void executePID(Pose2d currentPose, Pose2d vel, Pose2d target) {
 
         double xErr = target.getX() - currentPose.getX();
         double yErr = target.getY() - currentPose.getY();
@@ -199,11 +208,15 @@ public class CompetitionDrive extends LinearOpMode {
             return;
         }
 
-        if (Math.abs(xErr) < 5) xIntegral = Math.max(-10, Math.min(10, xIntegral + xErr * 0.02));
-        else xIntegral = 0;
+        if (Math.abs(xErr) < 5)
+            xIntegral = Math.max(-10, Math.min(10, xIntegral + xErr * 0.02));
+        else
+            xIntegral = 0;
 
-        if (Math.abs(yErr) < 5) yIntegral = Math.max(-10, Math.min(10, yIntegral + yErr * 0.02));
-        else yIntegral = 0;
+        if (Math.abs(yErr) < 5)
+            yIntegral = Math.max(-10, Math.min(10, yIntegral + yErr * 0.02));
+        else
+            yIntegral = 0;
 
         double xCmd = xErr * HOLD_KP + xIntegral * HOLD_KI - vel.getX() * (HOLD_KD * 0.5);
         double yCmd = yErr * HOLD_KP + yIntegral * HOLD_KI - vel.getY() * (HOLD_KD * 0.5);
@@ -223,8 +236,8 @@ public class CompetitionDrive extends LinearOpMode {
 
     private void driveManual() {
         double inputY = -gamepad1.left_stick_y * DRIVE_POWER;
-        double inputX =  gamepad1.left_stick_x * DRIVE_POWER;
-        double rx     = -gamepad1.right_stick_x * ROTATION_POWER;
+        double inputX = gamepad1.left_stick_x * DRIVE_POWER;
+        double rx = -gamepad1.right_stick_x * ROTATION_POWER;
 
         double botHeading = drive.getRawExternalHeading();
         double rotX = inputX * Math.cos(-botHeading) - inputY * Math.sin(-botHeading);
@@ -251,7 +264,8 @@ public class CompetitionDrive extends LinearOpMode {
     private void handleShooter() {
         if (gamepad1.b && !lastGamepad1B) {
             readyToShoot = !readyToShoot;
-            if (readyToShoot) updatePIDCoefficients();
+            if (readyToShoot)
+                updatePIDCoefficients();
         }
         lastGamepad1B = gamepad1.b;
 
@@ -297,16 +311,18 @@ public class CompetitionDrive extends LinearOpMode {
                 break;
         }
     }
+
     private void sendTelemetry(Pose2d pose, boolean tagVisible, boolean aligning) {
-        telemetry.addData("Mode",         aligning   ? "ALIGNING" : "MANUAL");
-        telemetry.addData("Tag Visible",  tagVisible ? "YES"      : "NO");
-        telemetry.addData("Heading IMU",  "%.1f°", Math.toDegrees(drive.getRawExternalHeading()));
-        telemetry.addData("Shooter",      readyToShoot ? "ON" : "OFF");
-        telemetry.addData("Shoot State",  currentShootState.toString());
+        telemetry.addData("Mode", aligning ? "ALIGNING" : "MANUAL");
+        telemetry.addData("Tag Visible", tagVisible ? "YES" : "NO");
+        telemetry.addData("Heading IMU", "%.1f°", Math.toDegrees(drive.getRawExternalHeading()));
+        telemetry.addData("Shooter", readyToShoot ? "ON" : "OFF");
+        telemetry.addData("Shoot State", currentShootState.toString());
         if (aligning) {
             telemetry.addData("X Error", "%.1f", TARGET_POSE_RED.getX() - pose.getX());
             telemetry.addData("Y Error", "%.1f", TARGET_POSE_RED.getY() - pose.getY());
-            telemetry.addData("H Error", "%.1f°", Math.toDegrees(Angle.normDelta(TARGET_POSE_RED.getHeading() - pose.getHeading())));
+            telemetry.addData("H Error", "%.1f°",
+                    Math.toDegrees(Angle.normDelta(TARGET_POSE_RED.getHeading() - pose.getHeading())));
         }
         telemetry.update();
     }
