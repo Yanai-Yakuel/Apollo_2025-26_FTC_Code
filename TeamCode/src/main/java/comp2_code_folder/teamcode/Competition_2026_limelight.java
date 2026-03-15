@@ -70,6 +70,9 @@ public class Competition_2026_limelight extends LinearOpMode {
     private boolean lastGamepad1X = false;
     private boolean lastGamepad1Y = false;
 
+    private double manualAngleOffset = 0;  // ← תוסיף את השורה הזו כאן!
+
+
     @Override
     public void runOpMode() throws InterruptedException {
 
@@ -101,12 +104,18 @@ public class Competition_2026_limelight extends LinearOpMode {
             limelight = null;
         }
 
+
         waitForStart();
+
+    //    manualAngleOffset = drive.getPoseEstimate().getHeading() + Math.toRadians(-90);
+        Pose2d currentPose = drive.getPoseEstimate();
+
+        reset_pos(new Pose2d(currentPose.getX(), currentPose.getY(),Math.toRadians(90)));
 
         while (opModeIsActive() && !isStopRequested()) {
 
             drive.update();
-            Pose2d currentPose = drive.getPoseEstimate();
+             currentPose = drive.getPoseEstimate();
             Pose2d poseVelocity = drive.getPoseVelocity();
             if (poseVelocity == null)
                 poseVelocity = new Pose2d();
@@ -124,7 +133,7 @@ public class Competition_2026_limelight extends LinearOpMode {
 
             // X button: reset heading to 90°
             if (gamepad1.x && !lastGamepad1X) {
-                drive.setPoseEstimate(new Pose2d(
+                reset_pos(new Pose2d(
                         currentPose.getX(),
                         currentPose.getY(),
                         Math.toRadians(90)));
@@ -179,6 +188,9 @@ public class Competition_2026_limelight extends LinearOpMode {
             double y = botPose.getPosition().y * M_TO_IN;
             double yaw = Math.toRadians(botPose.getOrientation().getYaw());
             drive.setPoseEstimate(new Pose2d(x, y, yaw));
+
+            //  manualAngleOffset = yaw + Math.toRadians(90);
+
         }
     }
 
@@ -200,7 +212,7 @@ public class Competition_2026_limelight extends LinearOpMode {
 
         double distance = Math.hypot(xErr, yErr);
 
-        if (distance < 0.5 && Math.abs(hErr) < Math.toRadians(2)) {
+        if (distance < 0.3 && Math.abs(hErr) < Math.toRadians(2)) {
             drive.setWeightedDrivePower(new Pose2d(0, 0, 0));
             limelightAlign = false;
             xIntegral = 0;
@@ -235,15 +247,22 @@ public class Competition_2026_limelight extends LinearOpMode {
     }
 
     private void driveManual() {
+
+        Pose2d pose = drive.getPoseEstimate();
         double inputY = -gamepad1.left_stick_y * DRIVE_POWER;
         double inputX = gamepad1.left_stick_x * DRIVE_POWER;
         double rx = -gamepad1.right_stick_x * ROTATION_POWER;
 
-        double botHeading = drive.getRawExternalHeading();
+        double botHeading = pose.getHeading() - manualAngleOffset;
+
         double rotX = inputX * Math.cos(-botHeading) - inputY * Math.sin(-botHeading);
         double rotY = inputX * Math.sin(-botHeading) + inputY * Math.cos(-botHeading);
 
         drive.setWeightedDrivePower(new Pose2d(rotX, rotY, rx));
+    }
+
+    private void reset_pos(Pose2d current_pos){
+        drive.setPoseEstimate(current_pos);
     }
 
     private void handleIntake() {
