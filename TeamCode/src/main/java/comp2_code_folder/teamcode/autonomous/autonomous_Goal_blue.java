@@ -15,7 +15,7 @@ import comp2_code_folder.teamcode.drive.SampleMecanumDrive;
 import comp2_code_folder.teamcode.drive.DriveConstants;
 
 @Autonomous(name = "Autonomous_GOAL_BLUE", group = "drive")
-public class Autonomous_goal_blue extends LinearOpMode {
+public class autonomous_Goal_blue extends LinearOpMode {
     private SampleMecanumDrive drive;
     private DcMotor intakeMotor, transfer_motor;
     private DcMotorEx shoot_u, shoot_d;
