@@ -66,4 +66,8 @@ public class Encoder {
         int multiplier = direction.getMultiplier();
         return motor.getVelocity() * multiplier;
     }
+
+    public double getCorrectedVelocity() {
+        return (double) motor.getVelocity();
+    }
 }
