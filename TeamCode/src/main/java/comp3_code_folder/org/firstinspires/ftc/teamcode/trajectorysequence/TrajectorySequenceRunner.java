@@ -1,4 +1,4 @@
-﻿package comp3_code_folder.org.firstinspires.ftc.teamcode.trajectorysequence;
+package comp3_code_folder.org.firstinspires.ftc.teamcode.trajectorysequence;
 
 import androidx.annotation.Nullable;
 

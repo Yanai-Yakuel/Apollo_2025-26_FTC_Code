@@ -1,4 +1,4 @@
-﻿package comp3_code_folder.org.firstinspires.ftc.teamcode.autonomous;
+package comp3_code_folder.org.firstinspires.ftc.teamcode.autonomous;
 
 import comp3_code_folder.org.firstinspires.ftc.teamcode.drive.DriveConstants;
 import comp3_code_folder.org.firstinspires.ftc.teamcode.drive.PoseStorage;
